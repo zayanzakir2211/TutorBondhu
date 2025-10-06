@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="assets/img/logo2.png" type="image/png" />
+    <title>Syllabus Scan | TutorBondhu</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <div id="particles-js"></div>
+    <div class="floating-box" style="top: 15%; left: 8%;"></div>
+    <div class="floating-box" style="top: 25%; right: 12%;"></div>
+    <div class="floating-box" style="bottom: 20%; left: 18%;"></div>
+    <div class="floating-box" style="bottom: 30%; right: 8%;"></div>
+    
+    <header>
+        <div class="logo" onclick="window.location.href='dashboard.html'"> 
+            <img src="assets/img/logo.png" alt="Logo" class="logo">
+        </div>
+        <div class="theme-dropdown">
+            <button class="theme-btn" id="theme-btn" onclick="toggleThemeMenu()">
+                <span id="theme-icon"><i class="fas fa-moon"></i></span>
+            </button>
+            <div class="theme-menu" id="theme-menu">
+                <button class="theme-option" onclick="setTheme('system')">
+                    <i class="fas fa-desktop"></i> System
+                </button>
+                <button class="theme-option" onclick="setTheme('light')">
+                    <i class="fas fa-sun"></i> Light
+                </button>
+                <button class="theme-option" onclick="setTheme('dark')">
+                    <i class="fas fa-moon"></i> Dark
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <section>
+        <div class="menu">
+            <button id="menuDashboard" onclick="window.location.href='dashboard.html'">
+                <i class="fas fa-home"></i> Dashboard
+            </button>
+            <button id="menuScan" class="active" onclick="window.location.href='scan.html'">
+                <i class="fas fa-camera"></i> Syllabus Scan
+            </button>
+            <button id="menuHistory" onclick="window.location.href='history.html'">
+                <i class="fas fa-history"></i> History
+            </button>
+            <button id="menuChatAI" onclick="window.location.href='chatai.html'"><i class="fas fa-robot"></i> Chat AI</button>
+            <button class="btn logout" onclick="logout()">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+        <div class="header-right" id="welcomeName">Welcome!</div>
+    </section>
+
+    <main>
+        <div class="ocr-section">
+            <h2 class="section-title"><i class="fas fa-camera"></i> Scan Syllabusdients</h2>
+            <div id="dropArea" class="upload-area">
+                <div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+                <p>Drag & drop or click to upload an image</p>
+                <input type="file" id="fileInput" hidden accept="image/*">
+            </div>
+            <div class="image-preview" id="previewContainer" style="display:none;">
+                <img id="previewImage" alt="Preview">
+            </div>
+            <button class="btn extract" onclick="uploadImage()"><i class="fas fa-text"></i> Extract Text</button>
+            <button class="btn analyze" onclick="analyzeText()"><i class="fas fa-brain"></i> Analyze</button>
+            <textarea id="ocrResult" placeholder="Extracted text will appear here...
+Or Just Type Here."></textarea>
+            <div class="ai-output" id="aiOutput">AI analysis will appear here...</div>
+        </div>
+        <div class="note">
+            <p><i class="fas fa-info-circle"></i> Transparency Note: Ai can make mistakes So, double check everything.</p>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script src="assets/js/particles.js"></script>
+    <script src="assets/js/main.js"></script>
+    <script>
+        // Initialize scan-specific functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set active menu item
+            document.getElementById('menuScan').classList.add('active');
+            
+            // Load user data
+            const user = JSON.parse(localStorage.getItem("user")||"{}");
+            document.getElementById("welcomeName").textContent = `Welcome, ${user.fullName||"User"}!`;
+            
+            // Initialize file upload functionality
+            const dropArea = document.getElementById("dropArea"),
+                  fileInput = document.getElementById("fileInput"),
+                  previewImage = document.getElementById("previewImage"),
+                  previewContainer = document.getElementById("previewContainer");
+
+            dropArea.addEventListener("click", ()=>fileInput.click());
+            fileInput.addEventListener("change", ()=>handleFile(fileInput.files[0]));
+            dropArea.addEventListener("dragover", e=>{ e.preventDefault(); dropArea.style.background="rgba(22,163,74,0.1)"; });
+            dropArea.addEventListener("dragleave", ()=>dropArea.style.background="rgba(22,163,74,0.03)");
+            dropArea.addEventListener("drop", e=>{ e.preventDefault(); const file=e.dataTransfer.files[0]; if(file) handleFile(file); });
+
+            function handleFile(file){
+                const reader = new FileReader();
+                reader.onload = e=>{ 
+                    previewImage.src=e.target.result; 
+                    previewContainer.style.display="block"; 
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        async function uploadImage(){
+            const user = JSON.parse(localStorage.getItem("user")||"{}");
+            const file = document.getElementById('fileInput').files[0];
+            if(!file) return alert("Please upload an image first!");
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("userId", user.userId);
+            document.getElementById("ocrResult").value = "⏳ Processing...";
+            try{
+                const res = await fetch("/ocr", { method:"POST", body: formData });
+                const data = await res.json();
+                document.getElementById("ocrResult").value = data.extracted_text;
+                document.getElementById("aiOutput").textContent = "AI analysis will appear here...";
+            } catch(err){ document.getElementById("ocrResult").value = "❌ OCR failed."; }
+        }
+
+        async function analyzeText(){
+  const user = JSON.parse(localStorage.getItem("user")||"{}");
+  const text = document.getElementById("ocrResult").value;
+  if(!text.trim()) return alert("No text to analyze!");
+  const aiOutput = document.getElementById("aiOutput");
+  aiOutput.textContent = "⏳ AI analyzing...";
+  try{
+    const res = await fetch("/analyze", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        userId:user.userId, 
+        text, 
+        userClass:user.userClass||[], 
+        examDate:user.examDate||null
+      })
+    });
+    const data = await res.json();
+    if(data.success) aiOutput.innerHTML = marked.parse(data.analysis);
+    else aiOutput.textContent = "❌ AI analysis failed.";
+  } catch(err){ aiOutput.textContent = "❌ AI analysis failed."; }
+}
+    </script>
+</body>
+</html>

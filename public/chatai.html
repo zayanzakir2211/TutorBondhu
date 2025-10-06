@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="assets/img/logo2.png" type="image/png" />
+  <title>AI Chat | TutorBondhu</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <style>
+    .chat-container {
+      background: rgba(0,0,0,0.05);
+      border-radius: 12px;
+      padding: 15px;
+      height: 400px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+    .chat-message {
+      padding: 8px 12px;
+      margin: 6px 0;
+      border-radius: 10px;
+      max-width: 75%;
+    }
+    .chat-message.user {
+      background: #16a34a;
+      color: white;
+      align-self: flex-end;
+      margin-left: auto;
+    }
+    .chat-message.ai {
+      background: white;
+      border: 1px solid #ccc;
+      color: black;
+      margin-right: auto;
+    }
+    .chat-message img.chat-image {
+      max-width: 200px;
+      border-radius: 10px;
+    }
+    .chat-input-area {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .chat-input-area input[type="text"] {
+      flex: 1;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+    }
+    .chat-input-area .btn {
+      padding: 10px 14px;
+      border-radius: 50%;
+      background: #16a34a;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    .chat-input-area .btn.upload {
+      background: #3b82f6;
+    }
+  </style>
+</head>
+<body>
+  <div id="particles-js"></div>
+  <header>
+    <div class="logo" onclick="window.location.href='dashboard.html'"> 
+      <img src="assets/img/logo.png" alt="Logo" class="logo">
+      
+    </div>
+    <div class="theme-dropdown">
+      <button class="theme-btn" id="theme-btn" onclick="toggleThemeMenu()">
+        <span id="theme-icon"><i class="fas fa-moon"></i></span>
+      </button>
+      <div class="theme-menu" id="theme-menu">
+        <button class="theme-option" onclick="setTheme('system')"><i class="fas fa-desktop"></i> System</button>
+        <button class="theme-option" onclick="setTheme('light')"><i class="fas fa-sun"></i> Light</button>
+        <button class="theme-option" onclick="setTheme('dark')"><i class="fas fa-moon"></i> Dark</button>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <div class="menu">
+      <button id="menuDashboard" onclick="window.location.href='dashboard.html'"><i class="fas fa-home"></i> Dashboard</button>
+      <button id="menuScan" onclick="window.location.href='scan.html'"><i class="fas fa-camera"></i> Syllabus Scan</button>
+      <button id="menuHistory" onclick="window.location.href='history.html'"><i class="fas fa-history"></i> History</button>
+      <button id="menuChatAI" class="active" onclick="window.location.href='chatai.html'"><i class="fas fa-robot"></i> Chat AI</button>
+      <button class="btn logout" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</button>
+    </div>
+    <div class="header-right" id="welcomeName">Welcome!</div>
+  </section>
+
+  <main>
+    <div class="chat-section">
+      <h2 class="section-title"><i class="fas fa-robot"></i> Chat with AI</h2>
+
+      <div id="chatContainer" class="chat-container"></div>
+
+      <div class="chat-input-area">
+        <input type="file" id="chatImageInput" hidden accept="image/*">
+       
+        <input type="text" id="chatMessage" placeholder="Type your message...">
+        <button class="btn send" onclick="sendMessage()"><i class="fas fa-paper-plane"></i></button>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+  <script src="assets/js/particles.js"></script>
+  <script src="assets/js/main.js"></script>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      document.getElementById("welcomeName").textContent = `Welcome, ${user.fullName || "User"}!`;
+      loadChatHistory();
+    });
+
+    function addMessage(role, content, isImage=false) {
+      const chatContainer = document.getElementById("chatContainer");
+      const messageDiv = document.createElement("div");
+      messageDiv.className = `chat-message ${role}`;
+      if (isImage) {
+        const img = document.createElement("img");
+        img.src = content;
+        img.className = "chat-image";
+        messageDiv.appendChild(img);
+      } else {
+        messageDiv.innerHTML = marked.parse(content);
+      }
+      chatContainer.appendChild(messageDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+
+      // Save to history
+      saveChatHistory(role, content, isImage);
+    }
+
+    function saveChatHistory(role, content, isImage=false) {
+      let history = JSON.parse(localStorage.getItem("chatHistory") || "[]");
+      history.push({ role, content, isImage });
+      localStorage.setItem("chatHistory", JSON.stringify(history));
+    }
+
+    
+
+    async function sendMessage() {
+      const input = document.getElementById("chatMessage");
+      const msg = input.value.trim();
+      const fileInput = document.getElementById("chatImageInput");
+      if (!msg && !fileInput.files.length) return;
+
+      if (msg) {
+        addMessage("user", msg);
+      }
+      let formData = new FormData();
+      const user = JSON.parse(localStorage.getItem("user")||"{}");
+      formData.append("userId", user.userId || "guest");
+      if (msg) formData.append("message", msg);
+
+      if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        formData.append("image", file);
+        const reader = new FileReader();
+        reader.onload = e => addMessage("user", e.target.result, true);
+        reader.readAsDataURL(file);
+      }
+
+      input.value = "";
+      fileInput.value = "";
+
+      // Call backend
+      try {
+        const res = await fetch("/chatai", { method: "POST", body: formData });
+        const data = await res.json();
+        if (data.reply) {
+          addMessage("ai", data.reply);
+        } else {
+          addMessage("ai", "❌ No reply from AI.");
+        }
+      } catch (err) {
+        addMessage("ai", "❌ Failed to reach AI server.");
+      }
+    }
+  </script>
+
+  
+</body>
+</html>

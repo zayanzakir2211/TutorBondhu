@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="assets/img/logo2.png" type="image/png" />
+    <title>History | TutorBondhu</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+  .history-details p {
+    white-space: pre-wrap;   /* preserves line breaks */
+    word-wrap: break-word;   /* wraps long lines instead of overflowing */
+    margin: 0.5em 0;         /* adds some spacing between paragraphs */
+  }
+</style>
+
+</head>
+<body>
+    <div id="particles-js"></div>
+    <div class="floating-box" style="top: 12%; left: 7%;"></div>
+    <div class="floating-box" style="top: 22%; right: 11%;"></div>
+    <div class="floating-box" style="bottom: 18%; left: 16%;"></div>
+    <div class="floating-box" style="bottom: 28%; right: 6%;"></div>
+    
+    <header>
+        <div class="logo" onclick="window.location.href='dashboard.html'"> 
+            <img src="assets/img/logo.png" alt="Logo" class="logo">
+        </div>
+        <div class="theme-dropdown">
+            <button class="theme-btn" id="theme-btn" onclick="toggleThemeMenu()">
+                <span id="theme-icon"><i class="fas fa-moon"></i></span>
+            </button>
+            <div class="theme-menu" id="theme-menu">
+                <button class="theme-option" onclick="setTheme('system')">
+                    <i class="fas fa-desktop"></i> System
+                </button>
+                <button class="theme-option" onclick="setTheme('light')">
+                    <i class="fas fa-sun"></i> Light
+                </button>
+                <button class="theme-option" onclick="setTheme('dark')">
+                    <i class="fas fa-moon"></i> Dark
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <section>
+        <div class="menu">
+            <button id="menuDashboard" onclick="window.location.href='dashboard.html'">
+                <i class="fas fa-home"></i> Dashboard
+            </button>
+            <button id="menuScan" onclick="window.location.href='scan.html'">
+                <i class="fas fa-camera"></i> Syllabus Scan
+            </button>
+            <button id="menuHistory" class="active" onclick="window.location.href='history.html'">
+                <i class="fas fa-history"></i> History
+            </button>
+            <button id="menuChatAI" onclick="window.location.href='chatai.html'"><i class="fas fa-robot"></i> Chat AI</button>
+            <button class="btn logout" onclick="logout()">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+        <div class="header-right" id="welcomeName">Welcome!</div>
+    </section>
+
+    <main>
+        <h2 class="section-title"><i class="fas fa-history"></i> Scan & AI History</h2>
+        <ul class="history-list" id="historyList"><li>Loading...</li></ul>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script src="assets/js/particles.js"></script>
+    <script src="assets/js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        // Initialize history-specific functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set active menu item
+            document.getElementById('menuHistory').classList.add('active');
+            
+            // Load user data
+            const user = JSON.parse(localStorage.getItem("user")||"{}");
+            document.getElementById("welcomeName").textContent = `Welcome, ${user.fullName||"User"}!`;
+            
+            // Load history
+            loadHistory();
+        });
+
+        async function loadHistory(){
+            const user = JSON.parse(localStorage.getItem("user")||"{}");
+            const list = document.getElementById("historyList");
+            list.innerHTML = "Loading...";
+            try{
+                const res = await fetch("/history?userId="+encodeURIComponent(user.userId));
+                const data = await res.json();
+                if(!data.history || data.history.length===0) {
+                    list.innerHTML = "<li>No history yet.</li>";
+                } else {
+                    list.innerHTML = "";
+                    data.history.forEach((h,i)=>{
+                        const li = document.createElement("li");
+                        li.className = "history-item";
+                        
+                        // Summary view
+                        li.innerHTML = `
+                            <div class="history-summary" onclick="toggleHistory(${i})">
+                                <strong>Entry ${i+1}</strong> - ${new Date(h.createdAt || Date.now()).toLocaleString()}
+                            </div>
+                            <div class="history-details" id="historyDetails${i}" style="display:none;">
+                                <p><strong>Scan Text:</strong> ${h.ocr || "N/A"}</p>
+                                <p><strong>Manual Text:</strong> ${h.input || "N/A"}</p>
+                                <p><strong>AI Response:</strong> ${marked.parse(h.response) || "N/A"}</p>
+                                <button onclick="deleteHistory(${i})">Delete</button>
+                            </div>
+                        `;
+                        list.appendChild(li);
+                    });
+                }
+            } catch(err){ list.innerHTML = "<li>Error loading history.</li>"; }
+        }
+
+        function toggleHistory(index){
+            const details = document.getElementById("historyDetails"+index);
+            details.style.display = details.style.display === "none" ? "block" : "none";
+        }
+
+        async function deleteHistory(index){
+            if(!confirm("Delete this history?")) return;
+            const user = JSON.parse(localStorage.getItem("user")||"{}");
+            try{
+                const res = await fetch("/history", {
+                    method:"DELETE",
+                    headers:{"Content-Type":"application/json"},
+                    body: JSON.stringify({userId:user.userId,index})
+                });
+                const data = await res.json();
+                if(data.success) loadHistory();
+                else alert("❌ Failed to delete history.");
+            } catch(err){ alert("❌ Server error."); }
+        }
+    </script>
+</body>
+</html>

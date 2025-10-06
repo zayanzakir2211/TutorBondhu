@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="assets/img/logo2.png" type="image/png" />
+    <title>Error 404 | TutorBondhu</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Arvo:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #16a34a;
+            --primary-hover: #22c55e;
+            --background: #ffffff;
+            --foreground: #0f0f0f;
+            --muted: #f6f6f6;
+            --muted-foreground: #6b7280;
+            --border: #e5e7eb;
+            --card: #ffffff;
+            --card-foreground: #0f0f0f;
+            --ring: #16a34a;
+            --transition: all 0.3s ease;
+            --glass-green: rgba(22, 163, 74, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.2);
+        }
+
+        .dark {
+            --background: #0f0f0f;
+            --foreground: #f9fafb;
+            --muted: #1f2937;
+            --muted-foreground: #9ca3af;
+            --border: #374151;
+            --card: #1f2937;
+            --card-foreground: #f9fafb;
+            --glass-green: rgba(22, 163, 74, 0.5);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            transition: var(--transition);
+        }
+
+        body {
+            font-family: 'Arvo', serif;
+            text-align: center;
+            overflow: hidden;
+            background-color: var(--background);
+            color: var(--foreground);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .page-404 {
+            background: rgba(var(--card-rgb), 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            max-width: 90%;
+            width: 600px;
+
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            background: var(--card);
+        }
+
+        .page-404::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(22, 163, 74, 0.1) 0%, transparent 70%);
+            transform: rotate(25deg);
+            z-index: -1;
+        }
+
+        .image {
+            background-image: url("https://cdn.dribbble.com/users/285475/screenshots/2083086/dribbble_1.gif");
+            width: 70%;
+            height: 300px;
+            background-position: center;
+            background-repeat: no-repeat;
+            text-align: center;
+            margin: 20px auto;
+            position: relative;
+        }
+
+        @media (max-width: 768px) {
+            .image {
+                width: 100%;
+                height: 300px;
+                background-size: contain;
+            }
+            
+            .page-404 {
+                padding: 30px 20px;
+            }
+        }
+
+        .image h1 {
+            font-weight: 100;
+            font-size: 80px;
+            color: #000000;
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            text-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+        }
+
+        @media (max-width: 768px) {
+            .image h1 {
+                font-size: 65px;
+            }
+        }
+
+        h3 {
+            color: var(--foreground);
+            padding: 10px 20px;
+            margin: 10px 0;
+            display: inline-block;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        p {
+            color: var(--muted-foreground);
+            margin-top: -5px;
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+
+        .link_404 {
+            text-decoration: none;
+            color: #fff;
+            background-color: var(--primary);
+            padding: 14px 30px;
+            display: inline-block;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 18px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s ease;
+            box-shadow: 0 4px 15px rgba(22, 163, 74, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            
+            /* Glass effect */
+            background: linear-gradient(135deg, var(--glass-green) 0%, var(--primary) 100%);
+            backdrop-filter: blur(5px);
+        }
+
+        .link_404::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            transition: 0.5s;
+        }
+
+        .link_404:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(22, 163, 74, 0.4);
+            text-decoration: none;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+        }
+
+        .link_404:hover::before {
+            left: 100%;
+        }
+
+        .link_404 i {
+            margin-right: 10px;
+        }
+
+        /* Floating animation */
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .image {
+            animation: float 6s ease-in-out infinite;
+        }
+
+        /* Bubbles background */
+        .bubble {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(22, 163, 74, 0.1);
+            z-index: -1;
+        }
+
+        .bubble-1 {
+            width: 100px;
+            height: 100px;
+            top: 10%;
+            left: 10%;
+            animation: float 15s infinite ease-in-out;
+        }
+
+        .bubble-2 {
+            width: 150px;
+            height: 150px;
+            bottom: 15%;
+            right: 10%;
+            animation: float 18s infinite ease-in-out 1s;
+        }
+
+        .bubble-3 {
+            width: 70px;
+            height: 70px;
+            top: 20%;
+            right: 20%;
+            animation: float 12s infinite ease-in-out 2s;
+        }
+
+        /* Theme Dropdown */
+        .theme-dropdown {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .theme-btn {
+            padding: 0.5rem;
+            border: none;
+            background: var(--card);
+            cursor: pointer;
+            border-radius: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            color: var(--foreground);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border: 1px solid var(--border);
+        }
+
+        .theme-btn:hover {
+            background: var(--muted);
+        }
+
+        .theme-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            min-width: 120px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: var(--transition);
+            z-index: 1000;
+        }
+
+        .theme-menu.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .theme-option {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: var(--transition);
+            border: none;
+            background: transparent;
+            width: 100%;
+            text-align: left;
+            color: var(--foreground);
+        }
+
+        .theme-option:hover {
+            background: var(--muted);
+        }
+        .logo {
+      height: 50px;
+    }
+    </style>
+</head>
+
+<body>
+    <!-- Theme Dropdown -->
+
+    <div class="bubble bubble-1"></div>
+    <div class="bubble bubble-2"></div>
+    <div class="bubble bubble-3"></div>
+    
+    <div class="page-404">
+        <div class="image">
+            <h1 class="error">404</h1>
+        </div>
+        <h3>Page Not Found</h3>
+        <p>This page is still written on cave walls. Try the homepage.</p>
+        <a href="index.html" class="link_404">
+            <i class="fas fa-home"></i> Go to Home
+        </a>
+    </div>
+
+    <script>
+        // Theme Management
+        let currentTheme = localStorage.getItem('theme') || 'system';
+        
+        function updateThemeIcon() {
+            const resolvedTheme = getResolvedTheme();
+            const icon = resolvedTheme === 'dark' ? '🌙' : '☀️';
+            const systemIcon = currentTheme === 'system' ? '💻' : icon;
+            
+            document.getElementById('theme-icon').textContent = systemIcon;
+        }
+        
+        function getResolvedTheme() {
+            if (currentTheme === 'system') {
+                return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            return currentTheme;
+        }
+        
+        function applyTheme() {
+            const resolvedTheme = getResolvedTheme();
+            if (resolvedTheme === 'dark') {
+                document.body.classList.add('dark');
+            } else {
+                document.body.classList.remove('dark');
+            }
+            updateThemeIcon();
+        }
+        
+        function setTheme(theme) {
+            currentTheme = theme;
+            localStorage.setItem('theme', theme);
+            applyTheme();
+            toggleThemeMenu();
+        }
+        
+        function toggleThemeMenu() {
+            const menu = document.getElementById('theme-menu');
+            menu.classList.toggle('show');
+        }
+        
+        // Close dropdowns when clicking outside
+        function handleOutsideClick(event) {
+            const themeMenu = document.getElementById('theme-menu');
+            
+            if (!event.target.closest('.theme-dropdown')) {
+                themeMenu.classList.remove('show');
+            }
+        }
+
+        // Initialize everything when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            applyTheme();
+            
+            // Add event listeners
+            document.addEventListener('click', handleOutsideClick);
+            
+            // Listen for system theme changes
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                if (currentTheme === 'system') {
+                    applyTheme();
+                }
+            });
+            
+            console.log('TutorBondhu 404 page loaded successfully! 🍃');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="assets/img/logo2.png" type="image/png" />
+    <title>Dashboard | TutorBondhu</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <div id="particles-js"></div>
+    <div class="floating-box" style="top: 10%; left: 5%;"></div>
+    <div class="floating-box" style="top: 20%; right: 10%;"></div>
+    <div class="floating-box" style="bottom: 15%; left: 15%;"></div>
+    <div class="floating-box" style="bottom: 25%; right: 5%;"></div>
+    
+    <header>
+        <div class="logo" onclick="window.location.href='dashboard.html'"> 
+            <img src="assets/img/logo.png" alt="Logo" class="logo">
+        </div>
+        <div class="theme-dropdown">
+            <button class="theme-btn" id="theme-btn" onclick="toggleThemeMenu()">
+                <span id="theme-icon"><i class="fas fa-moon"></i></span>
+            </button>
+            <div class="theme-menu" id="theme-menu">
+                <button class="theme-option" onclick="setTheme('system')">
+                    <i class="fas fa-desktop"></i> System
+                </button>
+                <button class="theme-option" onclick="setTheme('light')">
+                    <i class="fas fa-sun"></i> Light
+                </button>
+                <button class="theme-option" onclick="setTheme('dark')">
+                    <i class="fas fa-moon"></i> Dark
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <section>
+        <div class="menu">
+            <button id="menuDashboard" class="active" onclick="window.location.href='dashboard.html'">
+                <i class="fas fa-home"></i> Dashboard
+            </button>
+            <button id="menuScan" onclick="window.location.href='scan.html'">
+                <i class="fas fa-camera"></i> Syllabus Scan
+            </button>
+            <button id="menuHistory" onclick="window.location.href='history.html'">
+                <i class="fas fa-history"></i> History
+            </button>
+            <button id="menuChatAI" onclick="window.location.href='chatai.html'"><i class="fas fa-robot"></i> Chat AI</button>
+            <button class="btn logout" onclick="logout()">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+        <div class="header-right" id="welcomeName">Welcome!</div>
+    </section>
+
+    <main>
+        <div class="user-card">
+            <h2 class="section-title"><i class="fas fa-user"></i> Your Information</h2>
+            <p><strong>Name:</strong> <span id="userName">Loading...</span></p>
+            <p><strong>Email:</strong> <span id="userEmail">Loading...</span></p>
+            <p><strong>User ID:</strong> <span id="userId">Loading...</span></p>
+            <p class="form-group">
+  <strong>Class/Education Level:</strong>
+  <select id="userClassInput">
+    <option value="">Select your class</option>
+    <option value="Class 1">Class 1</option>
+    <option value="Class 2">Class 2</option>
+    <option value="Class 3">Class 3</option>
+    <option value="Class 4">Class 4</option>
+    <option value="Class 5">Class 5</option>
+    <option value="Class 6">Class 6</option>
+    <option value="Class 7">Class 7</option>
+    <option value="Class 8">Class 8</option>
+    <option value="Class 9">Class 9</option>
+    <option value="Class 10">Class 10</option>
+    <option value="Class 11">Class 11</option>
+    <option value="Class 12">Class 12</option>
+    <option value="Undergraduate">Undergraduate</option>
+    <option value="Graduate">Graduate</option>
+    <option value="Post Graduate">Post Graduate</option>
+  </select>
+  <button class="btn analyze" onclick="saveUserClass()">Save</button>
+</p>
+            <p>
+                <strong>Date of Exam:</strong>
+                <input type="date" id="userDOB" onchange="calculateExamMonths()">
+<button class="btn analyze" onclick="saveExamDate()">Save/Update Exam Date</button>
+
+            </p>
+            <div class="age">
+                <span id="calculatedAge">Months Left: N/A</span>
+            </div>
+        </div>
+        <div class="features">
+            <h3 class="section-title"><i class="fas fa-star"></i> Features</h3>
+            <ul>
+                <li>Scan your Academic Syllabus</li>
+                <li>View history in History page</li>
+                <li>AI-powered syllabus analysis and daily routine making</li>
+                <li>Secure and private with AES encryption</li>
+            </ul>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script src="assets/js/particles.js"></script>
+    <script src="assets/js/main.js"></script>
+    <script>
+    // Initialize dashboard-specific functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set active menu item
+        document.getElementById('menuDashboard').classList.add('active');
+        
+        // Load user data
+        const user = JSON.parse(localStorage.getItem("user")||"{}");
+        document.getElementById("userName").textContent = user.fullName||"N/A";
+        document.getElementById("userEmail").textContent = user.email||"N/A";
+        document.getElementById("userId").textContent = user.userId || "N/A";
+        document.getElementById("welcomeName").textContent = `Welcome, ${user.fullName||"User"}!`;
+
+        // Load user class if available
+        if(user.userClass && user.userClass.length > 0){
+            document.getElementById("userClassInput").value = user.userClass[0];
+        }
+
+        // Load exam date if available - THIS IS THE FIX
+        if(user.examDate){
+            document.getElementById("userDOB").value = user.examDate;
+            calculateExamMonths();
+        }
+    });
+
+    function calculateExamMonths(){
+        const examDateValue = document.getElementById("userDOB").value;
+        if(!examDateValue){ 
+            document.getElementById("calculatedAge").textContent = "Months Left: N/A"; 
+            return; 
+        }
+
+        const examDate = new Date(examDateValue);
+        const today = new Date();
+
+        // Calculate the difference in months
+        let months = (examDate.getFullYear() - today.getFullYear()) * 12;
+        months += examDate.getMonth() - today.getMonth();
+
+        // If the exam day hasn't come yet in the current month, adjust
+        if (examDate.getDate() < today.getDate()) {
+            months -= 1;
+        }
+
+        if(months < 0){
+            document.getElementById("calculatedAge").textContent = "Exam date has passed!";
+        } else {
+            document.getElementById("calculatedAge").textContent = `Months Left: ${months}`;
+        }
+    }
+
+    // Update user class
+    async function saveUserClass(){
+        const user = JSON.parse(localStorage.getItem("user")||"{}");
+        const userClass = document.getElementById("userClassInput").value;
+        if(!userClass) return alert("Please select a class!");
+        try {
+            const res = await fetch("/updateUserClass", {
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body: JSON.stringify({userId:user.userId, userClass:[userClass]})
+            });
+            const data = await res.json();
+            if(data.success){
+                user.userClass = [userClass];
+                localStorage.setItem("user", JSON.stringify(user));
+                alert("Class updated successfully!");
+            } else alert("❌ Failed to update class.");
+        } catch(err){ alert("❌ Server error."); }
+    }
+
+    async function saveExamDate(){
+        const user = JSON.parse(localStorage.getItem("user")||"{}");
+        const examDate = document.getElementById("userDOB").value;
+        if(!examDate) return alert("Please select your exam date!");
+        try {
+            const res = await fetch("/updateExamDate", {
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body: JSON.stringify({userId:user.userId, examDate: examDate})
+            });
+            const data = await res.json();
+            if(data.success){
+                user.examDate = examDate;
+                localStorage.setItem("user", JSON.stringify(user));
+                calculateExamMonths();
+                alert("Exam date updated successfully!");
+            } else alert("❌ Failed to update exam date.");
+        } catch(err){ alert("❌ Server error."); }
+    }
+</script>
+</body>
+</html>
