@@ -1,117 +1,78 @@
 import express from "express";
-import multer from "multer";
 import fetch from "node-fetch";
-import fs from "fs";
 import crypto from "crypto";
-import readline from "readline";
 import path from "path";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const upload = multer({ dest: "uploads/" });
-import dotenv from "dotenv";
-dotenv.config();
-
-const OCR_API_KEY = process.env.OCR_API_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
-const USERS_FILE = path.join(__dirname, "users.json");
-const HISTORY_FILE = path.join(__dirname, "history.json");
-
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+// --- Environment variables ---
+const AES_KEY = process.env.AES_KEY;
+const OCR_API_KEY = process.env.OCR_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-rl.question("Enter your AES key (16 chars for AES-128): ", (AES_KEY) => {
-  rl.close();
+if (!AES_KEY || AES_KEY.length !== 16) {
+  throw new Error("AES_KEY must be exactly 16 characters long!");
+}
 
-  if (!AES_KEY || AES_KEY.length !== 16) {
-    console.log("AES key must be exactly 16 characters long!");
-    process.exit(1);
-  }
+// --- AES Encryption / Decryption ---
+function encrypt(text) {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv("aes-128-cbc", AES_KEY, iv);
+  let encrypted = cipher.update(text, "utf8", "hex");
+  encrypted += cipher.final("hex");
+  return iv.toString("hex") + ":" + encrypted;
+}
 
-  // ---------- AES Encryption / Decryption ----------
-  function encrypt(text) {
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv("aes-128-cbc", AES_KEY, iv);
-    let encrypted = cipher.update(text, "utf8", "hex");
-    encrypted += cipher.final("hex");
-    return iv.toString("hex") + ":" + encrypted;
-  }
+function decrypt(data) {
+  const [ivHex, encrypted] = data.split(":");
+  const iv = Buffer.from(ivHex, "hex");
+  const decipher = crypto.createDecipheriv("aes-128-cbc", AES_KEY, iv);
+  let decrypted = decipher.update(encrypted, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
+}
 
-  function decrypt(data) {
-    const [ivHex, encrypted] = data.split(":");
-    const iv = Buffer.from(ivHex, "hex");
-    const decipher = crypto.createDecipheriv("aes-128-cbc", AES_KEY, iv);
-    let decrypted = decipher.update(encrypted, "hex", "utf8");
-    decrypted += decipher.final("utf8");
-    return decrypted;
-  }
+// --- SHA3-512 Hash ---
+function sha3(data) {
+  return crypto.createHash("sha3-512").update(data).digest("hex");
+}
 
-  // ---------- SHA3-512 Hash ----------
-  function sha3(data) {
-    return crypto.createHash("sha3-512").update(data).digest("hex");
-  }
+// --- KV Storage Functions ---
+async function loadUsers() {
+  const data = await USERS_KV.get("all");
+  return data ? JSON.parse(data) : [];
+}
 
-  // ---------- Robust Load / Save Functions ----------
-  function loadUsers() {
-    if (!fs.existsSync(USERS_FILE)) return [];
-    try {
-      const data = fs.readFileSync(USERS_FILE, "utf8").trim();
-      if (!data) return [];
-      return JSON.parse(data);
-    } catch (err) {
-      console.error("Failed to load users.json:", err);
-      return [];
-    }
-  }
+async function saveUsers(users) {
+  await USERS_KV.put("all", JSON.stringify(users));
+}
 
-  function saveUsers(users) {
-    try {
-      fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-    } catch (err) {
-      console.error("Failed to save users.json:", err);
-    }
-  }
+async function loadHistory() {
+  const data = await HISTORY_KV.get("all");
+  return data ? JSON.parse(data) : [];
+}
 
-  function loadHistory() {
-    if (!fs.existsSync(HISTORY_FILE)) return [];
-    try {
-      const data = fs.readFileSync(HISTORY_FILE, "utf8").trim();
-      if (!data) return [];
-      return JSON.parse(data);
-    } catch (err) {
-      console.error("Failed to load history.json:", err);
-      return [];
-    }
-  }
+async function saveHistory(history) {
+  await HISTORY_KV.put("all", JSON.stringify(history));
+}
 
-  function saveHistory(history) {
-    try {
-      fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
-    } catch (err) {
-      console.error("Failed to save history.json:", err);
-    }
-  }
-
-  console.log("✅ AES key loaded successfully!");
-
- 
-  // ---------- REGISTER ----------
-app.post("/register", (req, res) => {
+// --- REGISTER ---
+app.post("/register", async (req, res) => {
   const { fullName, email, password, dob, userClass } = req.body;
-  if (!fullName || !email || !password || !dob || !userClass) 
+  if (!fullName || !email || !password || !dob || !userClass)
     return res.json({ success: false, message: "Missing fields" });
 
-  let users = loadUsers();
-  if (users.some(u => u.emailHash === sha3(email))) 
+  const users = await loadUsers();
+  if (users.some(u => u.emailHash === sha3(email)))
     return res.json({ success: false, message: "Email already registered" });
 
   const userId = users.length > 0 ? Math.max(...users.map(u => u.userId)) + 1 : 1;
@@ -122,20 +83,21 @@ app.post("/register", (req, res) => {
     emailHash: sha3(email),
     passwordHash: sha3(password),
     dob: encrypt(dob),
-    userClass: userClass.map(c => encrypt(c)), // Store class as array
-    examDate: null // Initialize exam date as null
+    userClass: userClass.map(c => encrypt(c)),
+    examDate: null
   };
 
   users.push(encUser);
-  saveUsers(users);
+  await saveUsers(users);
   res.json({ success: true, userId });
 });
-  // ---------- LOGIN ----------
-app.post("/login", (req, res) => {
+
+// --- LOGIN ---
+app.post("/login", async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.json({ success: false, message: "Missing fields" });
 
-  const users = loadUsers();
+  const users = await loadUsers();
   const user = users.find(u => u.emailHash === sha3(email) && u.passwordHash === sha3(password));
   if (!user) return res.json({ success: false, message: "Invalid credentials" });
 
@@ -150,60 +112,61 @@ app.post("/login", (req, res) => {
 
   res.json({ success: true, user: decryptedUser });
 });
- // ---------- UPDATE USER CLASS ----------
-app.post("/updateUserClass", (req, res) => {
+
+// --- UPDATE USER CLASS ---
+app.post("/updateUserClass", async (req, res) => {
   const { userId, userClass } = req.body;
-  if (!userId || !Array.isArray(userClass)) 
+  if (!userId || !Array.isArray(userClass))
     return res.json({ success: false, message: "Missing fields" });
 
-  let users = loadUsers();
+  const users = await loadUsers();
   const idx = users.findIndex(u => u.userId === userId);
   if (idx === -1) return res.json({ success: false, message: "User not found" });
 
   users[idx].userClass = userClass.map(c => encrypt(c));
-  saveUsers(users);
+  await saveUsers(users);
   res.json({ success: true });
 });
 
-// ---------- UPDATE EXAM DATE ----------
-app.post("/updateExamDate", (req, res) => {
+// --- UPDATE EXAM DATE ---
+app.post("/updateExamDate", async (req, res) => {
   const { userId, examDate } = req.body;
   if (!userId) return res.json({ success: false, message: "User ID required" });
 
-  let users = loadUsers();
+  const users = await loadUsers();
   const idx = users.findIndex(u => u.userId === userId);
   if (idx === -1) return res.json({ success: false, message: "User not found" });
 
   users[idx].examDate = examDate ? encrypt(examDate) : null;
-  saveUsers(users);
-
+  await saveUsers(users);
   res.json({ success: true });
 });
 
+// --- CALCULATE AGE ---
+function calculateAge(dob) {
+  if (!dob) return null;
+  const birthDate = new Date(dob);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
+  return age;
+}
 
-  // ---------- CALCULATE AGE ----------
-  function calculateAge(dob) {
-    if (!dob) return null;
-    const birthDate = new Date(dob);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
-    return age;
-  }
-
-  // ---------- OCR ----------
- app.post("/ocr", upload.single("file"), async (req, res) => {
+// --- OCR ---
+app.post("/ocr", async (req, res) => {
   try {
-    if (!req.file) return res.json({ extracted_text: "❌ No file uploaded" });
+    const formData = await req.formData();
+    const file = formData.get("file");
+    const userId = formData.get("userId");
 
-    // Read uploaded image
-    const fileData = fs.readFileSync(req.file.path);
-    const base64Image = fileData.toString("base64");
+    if (!file) return res.json({ extracted_text: "❌ No file uploaded" });
 
-    // Call Gemini API (using OCR_API_KEY like before)
+    const arrayBuffer = await file.arrayBuffer();
+    const base64Image = Buffer.from(arrayBuffer).toString("base64");
+
     const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + OCR_API_KEY,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${OCR_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -213,12 +176,7 @@ app.post("/updateExamDate", (req, res) => {
               role: "user",
               parts: [
                 { text: "Extract all text from this image as accurately as possible:" },
-                {
-                  inline_data: {
-                    mime_type: "image/png", // keep fixed unless you want auto-detect
-                    data: base64Image
-                  }
-                }
+                { inline_data: { mime_type: "image/png", data: base64Image } }
               ]
             }
           ]
@@ -227,7 +185,6 @@ app.post("/updateExamDate", (req, res) => {
     );
 
     const result = await response.json();
-
     let text = "⚠️ No text detected";
     if (result?.candidates?.[0]?.content?.parts?.[0]?.text) {
       text = result.candidates[0].content.parts[0].text.trim();
@@ -235,29 +192,21 @@ app.post("/updateExamDate", (req, res) => {
       text = "❌ API Error: " + result.error.message;
     }
 
-    if (req.body.userId && text && text !== "⚠️ No text detected") {
-      const history = loadHistory();
-      history.push({
-        userId: req.body.userId,
-        ocr: encrypt(text),
-        input: "",
-        response: "",
-        timestamp: new Date().toISOString()
-      });
-      saveHistory(history);
+    if (userId && text && text !== "⚠️ No text detected") {
+      const history = await loadHistory();
+      history.push({ userId, ocr: encrypt(text), input: "", response: "", timestamp: new Date().toISOString() });
+      await saveHistory(history);
     }
 
     res.json({ extracted_text: text });
   } catch (e) {
     res.json({ extracted_text: "❌ OCR failed: " + e.message });
-  } finally {
-    if (req.file) fs.unlinkSync(req.file.path);
   }
 });
 
-  // ---------- ANALYZE ----------
+// --- ANALYZE ---
 app.post("/analyze", async (req, res) => {
-  const { text, userClass, examDate, userId } = req.body;  // Changed healthIssues to userClass
+  const { text, userClass, examDate, userId } = req.body;
   if (!text || !userId) return res.json({ success: false, analysis: "No text provided" });
 
   try {
@@ -265,14 +214,8 @@ app.post("/analyze", async (req, res) => {
     if (examDate) {
       const today = new Date();
       const exam = new Date(examDate);
-
-      monthsLeft = (exam.getFullYear() - today.getFullYear()) * 12;
-      monthsLeft += exam.getMonth() - today.getMonth();
-
-      // adjust if exam day hasn't come yet in the current month
-      if (exam.getDate() < today.getDate()) {
-        monthsLeft -= 1;
-      }
+      monthsLeft = (exam.getFullYear() - today.getFullYear()) * 12 + (exam.getMonth() - today.getMonth());
+      if (exam.getDate() < today.getDate()) monthsLeft--;
     }
 
     const timeInfo = monthsLeft !== null && monthsLeft >= 0
@@ -298,26 +241,16 @@ make the routine chapter wise and easy to finishable with full preparation do no
 
     const aiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-      }
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
     );
 
     const aiData = await aiResponse.json();
     const analysis = aiData?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "⚠️ No analysis returned";
 
     if (userId && text && analysis) {
-      const history = loadHistory();
-      history.push({
-        userId,
-        ocr: "",
-        input: encrypt(text),
-        response: encrypt(analysis),
-        timestamp: new Date().toISOString()
-      });
-      saveHistory(history);
+      const history = await loadHistory();
+      history.push({ userId, ocr: "", input: encrypt(text), response: encrypt(analysis), timestamp: new Date().toISOString() });
+      await saveHistory(history);
     }
 
     res.json({ success: true, analysis });
@@ -327,56 +260,33 @@ make the routine chapter wise and easy to finishable with full preparation do no
   }
 });
 
-// ---------- CHAT AI ----------
-app.post("/chatai", upload.single("file"), async (req, res) => {
-  const { userId, message } = req.body;
-  const file = req.file;
-
-  if (!userId || (!message && !file)) {
-    return res.json({ success: false, reply: "⚠️ No input provided" });
-  }
-
+// --- CHAT AI ---
+app.post("/chatai", async (req, res) => {
   try {
+    const formData = await req.formData();
+    const userId = formData.get("userId");
+    const message = formData.get("message");
+    const file = formData.get("file");
+
+    if (!userId || (!message && !file)) return res.json({ success: false, reply: "⚠️ No input provided" });
+
     let base64Image = null;
     if (file) {
-      const fileData = fs.readFileSync(file.path);
-      base64Image = fileData.toString("base64");
-      fs.unlinkSync(file.path);
+      const arrayBuffer = await file.arrayBuffer();
+      base64Image = Buffer.from(arrayBuffer).toString("base64");
     }
 
-    const contents = [
-      {
-        role: "user",
-        parts: []
-      }
-    ];
-
+    const contents = [{ role: "user", parts: [] }];
     if (message) contents[0].parts.push({ text: message });
-    if (base64Image) {
-      contents[0].parts.push({
-        inline_data: {
-          mime_type: "image/png", // you can detect dynamically later
-          data: base64Image
-        }
-      });
-    }
+    if (base64Image) contents[0].parts.push({ inline_data: { mime_type: "image/png", data: base64Image } });
 
-    // Call Gemini API
     const aiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents })
-      }
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents }) }
     );
 
     const aiData = await aiResponse.json();
-    const reply =
-      aiData?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
-      "⚠️ No reply from AI";
-
-    
+    const reply = aiData?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "⚠️ No reply from AI";
 
     res.json({ success: true, reply });
   } catch (err) {
@@ -385,50 +295,45 @@ app.post("/chatai", upload.single("file"), async (req, res) => {
   }
 });
 
-  // ---------- HISTORY ----------
-  app.get("/history", (req, res) => {
-    const { userId } = req.query;
-    if (!userId) return res.json({ history: [] });
+// --- HISTORY ---
+app.get("/history", async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.json({ history: [] });
 
-    const history = loadHistory();
-    const userHistory = history
-      .filter(h => h.userId == userId)
-      .map(h => ({
-        input: h.input ? decrypt(h.input) : "",
-        ocr: h.ocr ? decrypt(h.ocr) : "",
-        response: h.response ? decrypt(h.response) : "",
-        timestamp: h.timestamp
-      }));
+  const history = await loadHistory();
+  const userHistory = history.filter(h => h.userId == userId).map(h => ({
+    input: h.input ? decrypt(h.input) : "",
+    ocr: h.ocr ? decrypt(h.ocr) : "",
+    response: h.response ? decrypt(h.response) : "",
+    timestamp: h.timestamp
+  }));
 
-    res.json({ history: userHistory });
-  });
-
-  app.delete("/history", (req, res) => {
-    const { userId, index } = req.body;
-    if (!userId || index == null) return res.json({ success: false });
-
-    let history = loadHistory();
-    const userIndices = history.map((h, i) => h.userId == userId ? i : -1).filter(i => i !== -1);
-    if (index < 0 || index >= userIndices.length) return res.json({ success: false });
-
-    const delIndex = userIndices[index];
-    history.splice(delIndex, 1);
-    saveHistory(history);
-    res.json({ success: true });
-  });
-
-  // ---------- Default Route ----------
-  app.get("/", (req, res) => {
-    const indexPath = path.join(__dirname, "public", "index.html");
-    if (fs.existsSync(indexPath)) res.sendFile(indexPath);
-    else res.status(404).send("Not Found");
-  });
-
-  app.use((req, res) => {
-    res.status(404).sendFile(path.join(__dirname, "public", "404.html"));
-  });
-
-  // ---------- Start Server ----------
-  const PORT = 3000;
-  app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+  res.json({ history: userHistory });
 });
+
+app.delete("/history", async (req, res) => {
+  const { userId, index } = req.body;
+  if (!userId || index == null) return res.json({ success: false });
+
+  const history = await loadHistory();
+  const userIndices = history.map((h, i) => h.userId == userId ? i : -1).filter(i => i !== -1);
+  if (index < 0 || index >= userIndices.length) return res.json({ success: false });
+
+  const delIndex = userIndices[index];
+  history.splice(delIndex, 1);
+  await saveHistory(history);
+  res.json({ success: true });
+});
+
+// --- Default Routes ---
+app.get("/", (req, res) => {
+  res.status(200).sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+app.use((req, res) => {
+  res.status(404).sendFile(path.join(__dirname, "public", "404.html"));
+});
+
+// --- Export Express App for Cloudflare Workers ---
+import { createServer } from "express-cloudflare";
+export default createServer(app);
