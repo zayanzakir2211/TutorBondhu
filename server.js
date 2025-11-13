@@ -3,17 +3,16 @@ import multer from "multer";
 import fetch from "node-fetch";
 import fs from "fs";
 import crypto from "crypto";
-import readline from "readline";
 import path from "path";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const upload = multer({ dest: "uploads/" });
-import dotenv from "dotenv";
-dotenv.config();
 
 const OCR_API_KEY = process.env.OCR_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -24,94 +23,82 @@ const HISTORY_FILE = path.join(__dirname, "history.json");
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+// ---------- AES Key Setup ----------
+const AES_KEY = "1234567891234567"; // Must be exactly 16 characters long
+console.log("✅ AES key loaded successfully!");
 
-rl.question("Enter your AES key (16 chars for AES-128): ", (AES_KEY) => {
-  rl.close();
+// ---------- AES Encryption / Decryption ----------
+function encrypt(text) {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv("aes-128-cbc", AES_KEY, iv);
+  let encrypted = cipher.update(text, "utf8", "hex");
+  encrypted += cipher.final("hex");
+  return iv.toString("hex") + ":" + encrypted;
+}
 
-  if (!AES_KEY || AES_KEY.length !== 16) {
-    console.log("AES key must be exactly 16 characters long!");
-    process.exit(1);
+function decrypt(data) {
+  const [ivHex, encrypted] = data.split(":");
+  const iv = Buffer.from(ivHex, "hex");
+  const decipher = crypto.createDecipheriv("aes-128-cbc", AES_KEY, iv);
+  let decrypted = decipher.update(encrypted, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
+}
+
+// ---------- SHA3-512 Hash ----------
+function sha3(data) {
+  return crypto.createHash("sha3-512").update(data).digest("hex");
+}
+
+// ---------- Robust Load / Save Functions ----------
+function loadUsers() {
+  if (!fs.existsSync(USERS_FILE)) return [];
+  try {
+    const data = fs.readFileSync(USERS_FILE, "utf8").trim();
+    if (!data) return [];
+    return JSON.parse(data);
+  } catch (err) {
+    console.error("Failed to load users.json:", err);
+    return [];
   }
+}
 
-  // ---------- AES Encryption / Decryption ----------
-  function encrypt(text) {
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv("aes-128-cbc", AES_KEY, iv);
-    let encrypted = cipher.update(text, "utf8", "hex");
-    encrypted += cipher.final("hex");
-    return iv.toString("hex") + ":" + encrypted;
+function saveUsers(users) {
+  try {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+  } catch (err) {
+    console.error("Failed to save users.json:", err);
   }
+}
 
-  function decrypt(data) {
-    const [ivHex, encrypted] = data.split(":");
-    const iv = Buffer.from(ivHex, "hex");
-    const decipher = crypto.createDecipheriv("aes-128-cbc", AES_KEY, iv);
-    let decrypted = decipher.update(encrypted, "hex", "utf8");
-    decrypted += decipher.final("utf8");
-    return decrypted;
+function loadHistory() {
+  if (!fs.existsSync(HISTORY_FILE)) return [];
+  try {
+    const data = fs.readFileSync(HISTORY_FILE, "utf8").trim();
+    if (!data) return [];
+    return JSON.parse(data);
+  } catch (err) {
+    console.error("Failed to load history.json:", err);
+    return [];
   }
+}
 
-  // ---------- SHA3-512 Hash ----------
-  function sha3(data) {
-    return crypto.createHash("sha3-512").update(data).digest("hex");
+function saveHistory(history) {
+  try {
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+  } catch (err) {
+    console.error("Failed to save history.json:", err);
   }
+}
 
-  // ---------- Robust Load / Save Functions ----------
-  function loadUsers() {
-    if (!fs.existsSync(USERS_FILE)) return [];
-    try {
-      const data = fs.readFileSync(USERS_FILE, "utf8").trim();
-      if (!data) return [];
-      return JSON.parse(data);
-    } catch (err) {
-      console.error("Failed to load users.json:", err);
-      return [];
-    }
-  }
-
-  function saveUsers(users) {
-    try {
-      fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-    } catch (err) {
-      console.error("Failed to save users.json:", err);
-    }
-  }
-
-  function loadHistory() {
-    if (!fs.existsSync(HISTORY_FILE)) return [];
-    try {
-      const data = fs.readFileSync(HISTORY_FILE, "utf8").trim();
-      if (!data) return [];
-      return JSON.parse(data);
-    } catch (err) {
-      console.error("Failed to load history.json:", err);
-      return [];
-    }
-  }
-
-  function saveHistory(history) {
-    try {
-      fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
-    } catch (err) {
-      console.error("Failed to save history.json:", err);
-    }
-  }
-
-  console.log("✅ AES key loaded successfully!");
-
- 
-  // ---------- REGISTER ----------
+// ---------- REGISTER ----------
 app.post("/register", (req, res) => {
   const { fullName, email, password, dob, userClass } = req.body;
-  if (!fullName || !email || !password || !dob || !userClass) 
+  if (!fullName || !email || !password || !dob || !userClass)
     return res.json({ success: false, message: "Missing fields" });
 
   let users = loadUsers();
-  if (users.some(u => u.emailHash === sha3(email))) 
+  if (users.some(u => u.emailHash === sha3(email)))
     return res.json({ success: false, message: "Email already registered" });
 
   const userId = users.length > 0 ? Math.max(...users.map(u => u.userId)) + 1 : 1;
@@ -122,15 +109,16 @@ app.post("/register", (req, res) => {
     emailHash: sha3(email),
     passwordHash: sha3(password),
     dob: encrypt(dob),
-    userClass: userClass.map(c => encrypt(c)), // Store class as array
-    examDate: null // Initialize exam date as null
+    userClass: userClass.map(c => encrypt(c)),
+    examDate: null
   };
 
   users.push(encUser);
   saveUsers(users);
   res.json({ success: true, userId });
 });
-  // ---------- LOGIN ----------
+
+// ---------- LOGIN ----------
 app.post("/login", (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.json({ success: false, message: "Missing fields" });
@@ -150,10 +138,11 @@ app.post("/login", (req, res) => {
 
   res.json({ success: true, user: decryptedUser });
 });
- // ---------- UPDATE USER CLASS ----------
+
+// ---------- UPDATE USER CLASS ----------
 app.post("/updateUserClass", (req, res) => {
   const { userId, userClass } = req.body;
-  if (!userId || !Array.isArray(userClass)) 
+  if (!userId || !Array.isArray(userClass))
     return res.json({ success: false, message: "Missing fields" });
 
   let users = loadUsers();
@@ -180,28 +169,25 @@ app.post("/updateExamDate", (req, res) => {
   res.json({ success: true });
 });
 
+// ---------- CALCULATE AGE ----------
+function calculateAge(dob) {
+  if (!dob) return null;
+  const birthDate = new Date(dob);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
+  return age;
+}
 
-  // ---------- CALCULATE AGE ----------
-  function calculateAge(dob) {
-    if (!dob) return null;
-    const birthDate = new Date(dob);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
-    return age;
-  }
-
-  // ---------- OCR ----------
- app.post("/ocr", upload.single("file"), async (req, res) => {
+// ---------- OCR ----------
+app.post("/ocr", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.json({ extracted_text: "❌ No file uploaded" });
 
-    // Read uploaded image
     const fileData = fs.readFileSync(req.file.path);
     const base64Image = fileData.toString("base64");
 
-    // Call Gemini API (using OCR_API_KEY like before)
     const response = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + OCR_API_KEY,
       {
@@ -215,7 +201,7 @@ app.post("/updateExamDate", (req, res) => {
                 { text: "Extract all text from this image as accurately as possible:" },
                 {
                   inline_data: {
-                    mime_type: "image/png", // keep fixed unless you want auto-detect
+                    mime_type: "image/png",
                     data: base64Image
                   }
                 }
@@ -227,8 +213,8 @@ app.post("/updateExamDate", (req, res) => {
     );
 
     const result = await response.json();
-
     let text = "⚠️ No text detected";
+
     if (result?.candidates?.[0]?.content?.parts?.[0]?.text) {
       text = result.candidates[0].content.parts[0].text.trim();
     } else if (result?.error?.message) {
@@ -255,9 +241,9 @@ app.post("/updateExamDate", (req, res) => {
   }
 });
 
-  // ---------- ANALYZE ----------
+// ---------- ANALYZE ----------
 app.post("/analyze", async (req, res) => {
-  const { text, userClass, examDate, userId } = req.body;  // Changed healthIssues to userClass
+  const { text, userClass, examDate, userId } = req.body;
   if (!text || !userId) return res.json({ success: false, analysis: "No text provided" });
 
   try {
@@ -265,19 +251,14 @@ app.post("/analyze", async (req, res) => {
     if (examDate) {
       const today = new Date();
       const exam = new Date(examDate);
-
-      monthsLeft = (exam.getFullYear() - today.getFullYear()) * 12;
-      monthsLeft += exam.getMonth() - today.getMonth();
-
-      // adjust if exam day hasn't come yet in the current month
-      if (exam.getDate() < today.getDate()) {
-        monthsLeft -= 1;
-      }
+      monthsLeft = (exam.getFullYear() - today.getFullYear()) * 12 + (exam.getMonth() - today.getMonth());
+      if (exam.getDate() < today.getDate()) monthsLeft -= 1;
     }
 
-    const timeInfo = monthsLeft !== null && monthsLeft >= 0
-      ? `Time remaining: ${monthsLeft} months`
-      : "Time remaining: Not specified (assuming 3 months for study planning)";
+    const timeInfo =
+      monthsLeft !== null && monthsLeft >= 0
+        ? `Time remaining: ${monthsLeft} months`
+        : "Time remaining: Not specified (assuming 3 months for study planning)";
 
     const prompt = `You are an experienced tutor for Bangladeshi students. Create a comprehensive daily study routine based on the student's class level and syllabus.
 
@@ -355,13 +336,12 @@ app.post("/chatai", upload.single("file"), async (req, res) => {
     if (base64Image) {
       contents[0].parts.push({
         inline_data: {
-          mime_type: "image/png", // you can detect dynamically later
+          mime_type: "image/png",
           data: base64Image
         }
       });
     }
 
-    // Call Gemini API
     const aiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
@@ -376,8 +356,6 @@ app.post("/chatai", upload.single("file"), async (req, res) => {
       aiData?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
       "⚠️ No reply from AI";
 
-    
-
     res.json({ success: true, reply });
   } catch (err) {
     console.error(err);
@@ -385,50 +363,49 @@ app.post("/chatai", upload.single("file"), async (req, res) => {
   }
 });
 
-  // ---------- HISTORY ----------
-  app.get("/history", (req, res) => {
-    const { userId } = req.query;
-    if (!userId) return res.json({ history: [] });
+// ---------- HISTORY ----------
+app.get("/history", (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.json({ history: [] });
 
-    const history = loadHistory();
-    const userHistory = history
-      .filter(h => h.userId == userId)
-      .map(h => ({
-        input: h.input ? decrypt(h.input) : "",
-        ocr: h.ocr ? decrypt(h.ocr) : "",
-        response: h.response ? decrypt(h.response) : "",
-        timestamp: h.timestamp
-      }));
+  const history = loadHistory();
+  const userHistory = history
+    .filter(h => h.userId == userId)
+    .map(h => ({
+      input: h.input ? decrypt(h.input) : "",
+      ocr: h.ocr ? decrypt(h.ocr) : "",
+      response: h.response ? decrypt(h.response) : "",
+      timestamp: h.timestamp
+    }));
 
-    res.json({ history: userHistory });
-  });
-
-  app.delete("/history", (req, res) => {
-    const { userId, index } = req.body;
-    if (!userId || index == null) return res.json({ success: false });
-
-    let history = loadHistory();
-    const userIndices = history.map((h, i) => h.userId == userId ? i : -1).filter(i => i !== -1);
-    if (index < 0 || index >= userIndices.length) return res.json({ success: false });
-
-    const delIndex = userIndices[index];
-    history.splice(delIndex, 1);
-    saveHistory(history);
-    res.json({ success: true });
-  });
-
-  // ---------- Default Route ----------
-  app.get("/", (req, res) => {
-    const indexPath = path.join(__dirname, "public", "index.html");
-    if (fs.existsSync(indexPath)) res.sendFile(indexPath);
-    else res.status(404).send("Not Found");
-  });
-
-  app.use((req, res) => {
-    res.status(404).sendFile(path.join(__dirname, "public", "404.html"));
-  });
-
-  // ---------- Start Server ----------
-  const PORT = 3000;
-  app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+  res.json({ history: userHistory });
 });
+
+app.delete("/history", (req, res) => {
+  const { userId, index } = req.body;
+  if (!userId || index == null) return res.json({ success: false });
+
+  let history = loadHistory();
+  const userIndices = history.map((h, i) => h.userId == userId ? i : -1).filter(i => i !== -1);
+  if (index < 0 || index >= userIndices.length) return res.json({ success: false });
+
+  const delIndex = userIndices[index];
+  history.splice(delIndex, 1);
+  saveHistory(history);
+  res.json({ success: true });
+});
+
+// ---------- Default Route ----------
+app.get("/", (req, res) => {
+  const indexPath = path.join(__dirname, "public", "index.html");
+  if (fs.existsSync(indexPath)) res.sendFile(indexPath);
+  else res.status(404).send("Not Found");
+});
+
+app.use((req, res) => {
+  res.status(404).sendFile(path.join(__dirname, "public", "404.html"));
+});
+
+// ---------- Start Server ----------
+const PORT = 3000;
+app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
